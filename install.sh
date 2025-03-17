@@ -334,9 +334,13 @@ if [ "$1" = "install" ]; then
     echo $_sub
     echo $_kernel_flavor
     rsync -parA --delete $(pwd)/ "/var/cache/distfiles/linux-${_basekernel}.${_kernel_subver}-${_kernel_flavor}/"
-    mkdir -p "/tmp/linux-${_basekernel}.${_kernel_subver}-${_kernel_flavor}/${_kernel_flavor}/config/"
+    mkdir -p "/var/cache/distfiles/linux-${_basekernel}.${_kernel_subver}-${_kernel_flavor}/${_kernel_flavor}/config/"
     cp "../local-${_basekernel}-amd64.config" "/var/cache/distfiles/linux-${_basekernel}.${_kernel_subver}-${_kernel_flavor}/${_kernel_flavor}/config/${_kernel_flavor}-${_basekernel}-amd64.config"
-    sed -i 's|obj-$(CONFIG_FB_INTEL)|#obj-$(CONFIG_FB_INTEL)|g' "/var/cache/distfiles/linux-${_basekernel}.${_kernel_subver}-${_kernel_flavor}/"/drivers/Makefile
+    sed -i 's|obj-$(CONFIG_FB_INTEL)|#obj-$(CONFIG_FB_INTEL)|g' "/var/cache/distfiles/linux-${_basekernel}.${_kernel_subver}-${_kernel_flavor}/drivers/Makefile"
+    sed -i 's|^EXTRAVERSION =.*|EXTRAVERSION = -local|' "/var/cache/distfiles/linux-${_basekernel}.${_kernel_subver}-${_kernel_flavor}/Makefile"
+    rm -rf "/var/cache/distfiles/linux-${_basekernel}.${_kernel_subver}-${_kernel_flavor}/.git" || continue
+    tar -C "/var/cache/distfiles" -pcJf "linux-${_basekernel}.${_kernel_subver}-${_kernel_flavor}.tar.xz" "linux-${_basekernel}.${_kernel_subver}-${_kernel_flavor}"
+    mv "linux-${_basekernel}.${_kernel_subver}-${_kernel_flavor}.tar.xz" /var/cache/distfiles/
     exit 0
     set +x
     #make ${llvm_opt} -j ${_thread_num}
