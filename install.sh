@@ -325,7 +325,21 @@ if [ "$1" = "install" ]; then
     fi
 
     msg2 "Building kernel"
-    make ${llvm_opt} -j ${_thread_num}
+    set -x
+    pwd
+    unset _kernel_flavor
+    export _kernel_flavor="local"
+    echo $_basekernel
+    echo $_kernel_subver
+    echo $_sub
+    echo $_kernel_flavor
+    rsync -parA --delete $(pwd)/ "/var/cache/distfiles/linux-${_basekernel}.${_kernel_subver}-${_kernel_flavor}/"
+    mkdir -p "/tmp/linux-${_basekernel}.${_kernel_subver}-${_kernel_flavor}/${_kernel_flavor}/config/"
+    cp "../local-${_basekernel}-amd64.config" "/var/cache/distfiles/linux-${_basekernel}.${_kernel_subver}-${_kernel_flavor}/${_kernel_flavor}/config/${_kernel_flavor}-${_basekernel}-amd64.config"
+    sed -i 's|obj-$(CONFIG_FB_INTEL)|#obj-$(CONFIG_FB_INTEL)|g' "/var/cache/distfiles/linux-${_basekernel}.${_kernel_subver}-${_kernel_flavor}/"/drivers/Makefile
+    exit 0
+    set +x
+    #make ${llvm_opt} -j ${_thread_num}
     msg2 "Build successful"
 
     if [ "$_STRIP" = "true" ]; then
