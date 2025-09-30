@@ -328,7 +328,7 @@ if [ "$1" = "install" ]; then
     set -x
     pwd
     unset _kernel_flavor
-    export _kernel_flavor="local"
+    _kernel_flavor="${_kernel_flavor:-$ENV_KERNEL_FLAVOR}"
     echo $_basekernel
     echo $_kernel_subver
     echo $_sub
