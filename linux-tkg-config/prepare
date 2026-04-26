@@ -1,10 +1,25 @@
 #!/bin/bash
 
 # List of kernels that are maintained upstream
-_current_kernels=("6.17" "6.16" "6.15" "6.12" "6.6" "6.1" "5.15" "5.10" "5.4")
+_current_kernels=("7.0" "6.19" "6.18" "6.12" "6.6" "6.1" "5.15" "5.10")
 
 # List of kernels that are no longer maintained either upstream or locally
-_eol_kernels=("6.14" "6.13" "6.11" "6.10" "6.9" "6.8" "6.7" "6.5" "6.4" "6.3" "6.2" "6.0" "5.19" "5.18" "5.17" "5.16" "5.14" "5.13" "5.12" "5.11" "5.9" "5.8" "5.7")
+_eol_kernels=("6.17" "6.16" "6.15" "6.14" "6.13" "6.11" "6.10" "6.9" "6.8" "6.7" "6.5" "6.4" "6.3" "6.2" "6.0" "5.19" "5.18" "5.17" "5.16" "5.14" "5.13" "5.12" "5.11" "5.9" "5.8" "5.7" "5.4")
+
+_deprecated_config_vars=(
+  "_use_tmpfs"
+  "_source_in_tmpfs"
+  "_tmpfs_path"
+  "_cacule_rdb"
+  "_cacule_rdb_interval"
+  "_tt_high_hz"
+  "_x86_64_isalvl"
+  "_dracut_options"
+  "_bcachefs"
+  "_eevdf_sched_ext_support"
+  "_debugdisable_disabled_entry"
+  "_debugdisable_enabled_entry"
+)
 
 typeset -Ag _all_scheds
 _all_scheds=(
@@ -29,6 +44,7 @@ _cpu_marchs=(
   ["znver3"]="AMD Ryzen 6000/5000 | Mobile Ryzen 7030/5000 | Threadripper 5000WX | EPYC 7003"
   ["znver2"]="AMD Ryzen 4000/3000 | Mobile Ryzen 5[3,5,7]00U | Threadripper 3000WX | EPYC 7002"
   ["znver1"]="AMD Ryzen 1000/2000 | Athlon 200/300/3000 | Threadripper 1000 | EPYC 7001"
+  ["pantherlake"]="Intel Laptop Core Ultra 300"
   ["arrowlake-s"]="Intel Desktop Core Ultra 200"
   ["arrowlake"]="Intel Laptop Core Ultra 200"
   ["lunarlake"]="Intel Laptop Core Ultra 200V"
@@ -48,36 +64,6 @@ _kernel_git_remotes=(
   ["gregkh"]="https://github.com/gregkh/linux.git"
   ["torvalds"]="https://github.com/torvalds/linux.git"
 )
-
-_git_remote_names=( "${!_kernel_git_remotes[@]}" )
-
-# fill with kernel.org link if empty
-if [[ -z "$_git_mirror" ]]; then
-  msg2 "using default kernel.org git remote"
-  _git_mirror="${_kernel_git_remotes['kernel.org']}"
-fi
-
-# if alias, get actual link from map _kernel_git_remotes
-if [[ "${_git_remote_names[@]}" =~ "$_git_mirror" ]]; then
-  msg2 "using git mirror alias $_git_mirror"
-  _git_mirror="${_kernel_git_remotes[$_git_mirror]}"
-fi
-
-if $( ! timeout 10 git ls-remote $_git_mirror >/dev/null ) || \
-  [[ "$( git ls-remote $_git_mirror | head -n 1 )" = *502* ]]; then
-  error "Remote unreachable or took too long to respond"
-  exit 1
-fi
-
-# Fill out the latest tags map/dictionary
-_kernel_tags=$(git -c 'versionsort.suffix=-' \
-  ls-remote --exit-code --refs --sort='version:refname' --tags $_git_mirror '*.*' \
-  | cut --delimiter='/' --fields=3)
-
-typeset -Ag _kver_latest_tags_map
-for _key in "${_current_kernels[@]}" "${_eol_kernels[@]}"; do
-  _kver_latest_tags_map[$_key]=$(echo "$_kernel_tags" | grep -F "v$_key"| grep -v "v$_key"[0-9] | tail -1 | cut -c1-)
-done
 
 # PREEMPT_RT's supported kernel subversion
 typeset -Ag _rt_subver_map
@@ -129,24 +115,28 @@ _rt_rev_map=(
 _undefine() {
   for _config_name in "$@"; do
     scripts/config -k --undefine "${_config_name}"
+    echo "Undefined ${_config_name}" >> "$_where"/logs/prepare.log.txt
   done
 }
 
 _enable() {
   for _config_name in "$@"; do
     scripts/config -k --enable "${_config_name}"
+    echo "Enabled ${_config_name}" >> "$_where"/logs/prepare.log.txt
   done
 }
 
 _disable() {
   for _config_name in "$@"; do
     scripts/config -k --disable "${_config_name}"
+    echo "Disabled ${_config_name}" >> "$_where"/logs/prepare.log.txt
   done
 }
 
 _module() {
   for _config_name in "$@"; do
     scripts/config -k --module "${_config_name}"
+    echo "Defined ${_config_name} as module" >> "$_where"/logs/prepare.log.txt
   done
 }
 
@@ -274,6 +264,8 @@ _set_kernel_version() {
   # if $_version is a valid x.y.z version, define $_kernel_git_tag directly
   # Otherwise, empty it so it gets prompted
 
+  _define_kernel_tags
+
   if [[ "$_version" == *-latest ]]; then
     local kernel_ver="${_version::-7}"
     if [[ -v _kver_latest_tags_map["$kernel_ver"] ]]; then
@@ -297,10 +289,22 @@ _set_kernel_version() {
 
     _kernel_fullver_list=()
     for _key in "${_current_kernels[@]}"; do
-      _kernel_fullver_list+=("${_kver_latest_tags_map[$_key]}")
+      if [[ -v _kver_latest_tags_map["$_key"] ]]; then
+        _kernel_fullver_list+=("${_kver_latest_tags_map[$_key]}")
+      fi
     done
+
+    _eol_kernel_fullver_list=()
+    for _key in "${_eol_kernels[@]}"; do
+      if [[ -v _kver_latest_tags_map["$_key"] ]]; then
+        _eol_kernel_fullver_list+=("${_kver_latest_tags_map[$_key]}")
+      fi
+    done
+
     # Add the "Another" entry to enable building unmaintained kernel versions
-    _kernel_fullver_list+=("Another (no longer maintained upstream)")
+    if [[ "${#_eol_kernel_fullver_list[@]}" != 0 ]]; then
+      _kernel_fullver_list+=("Another (no longer maintained upstream)")
+    fi
 
     # Default index corresponds to latest stable kernel
     # put default index to "1" when the most recent kernel is an rc one
@@ -314,14 +318,9 @@ _set_kernel_version() {
     if [[ "${_selected_value}" == Another* ]]; then
       msg2 "Which EOL kernel version do you want to install?"
 
-      _kernel_fullver_list=()
-      for _key in "${_eol_kernels[@]}"; do
-        _kernel_fullver_list+=("${_kver_latest_tags_map[$_key]}")
-      done
-
       # Default index corresponds to latest unmaintained kernel
       _default_index="0"
-      _prompt_from_array "${_kernel_fullver_list[@]}"
+      _prompt_from_array "${_eol_kernel_fullver_list[@]}"
     fi
 
     _kernel_git_tag="$_selected_value"
@@ -408,7 +407,7 @@ _set_cpu_scheduler() {
 _set_compiler(){
   if ! [[ "$_compiler" =~ ^(gcc|llvm)$ ]]; then
     if [ -n "$_compiler" ] && [ "$_nofallback" = "true" ]; then
-      msg2 "Compiler \" $_compiler \" not recognized, exiting... "
+      msg2 "Compiler \" $_compiler \" not recognized, exiting..."
       exit 1
     else
       plain "Which compiler do you want to use?"
@@ -471,6 +470,59 @@ _define_kernel_abs_paths() {
 }
 
 
+_define_kernel_tags() {
+
+  _define_kernel_abs_paths
+
+  _git_remote_names=( "${!_kernel_git_remotes[@]}" )
+
+  if [[ ! "$_offline" =~ ^(y|Y|yes|true|True)$ ]]; then
+    # fill with kernel.org link if empty
+    if [[ -z "$_git_mirror" ]]; then
+      msg2 "using default kernel.org git remote"
+      _git_mirror="${_kernel_git_remotes['kernel.org']}"
+    fi
+
+    # if alias, get actual link from map _kernel_git_remotes
+    if [[ "${_git_remote_names[@]}" =~ "$_git_mirror" ]]; then
+      msg2 "using git mirror alias $_git_mirror"
+      _git_mirror="${_kernel_git_remotes[$_git_mirror]}"
+    fi
+
+    if $( ! timeout 10 git ls-remote $_git_mirror >/dev/null ) || \
+      [[ "$( git ls-remote $_git_mirror | head -n 1 )" = *502* ]]; then
+      error "Remote unreachable or took too long to respond"
+      exit 1
+    fi
+
+  else
+
+    _git_mirror="$_kernel_source_folder_abs"
+
+  fi
+
+  msg2 "Current git mirror: $_git_mirror"
+
+  # Fill out the latest tags map/dictionary
+  if [[ ! -v _kernel_tags ]]; then
+    msg2 "Fetching latest kernel tags"
+    typeset -g _kernel_tags=$(git -c 'versionsort.suffix=-' \
+      ls-remote --exit-code --refs --sort='version:refname' --tags $_git_mirror '*' \
+      | cut --delimiter='/' --fields=3)
+  fi
+
+  if [[ ! -v _kver_latest_tags_map ]]; then
+    typeset -Ag _kver_latest_tags_map
+    for _key in "${_current_kernels[@]}" "${_eol_kernels[@]}"; do
+      local _tag=$(echo "$_kernel_tags" | grep -F "v$_key"| grep -v "v$_key"[0-9] | tail -1 | cut -c1-)
+      if [[ -n "$_tag" ]]; then
+        _kver_latest_tags_map[$_key]="$_tag"
+      fi
+    done
+  fi
+}
+
+
 _setup_kernel_work_folder() {
 
   _define_kernel_abs_paths
@@ -491,8 +543,10 @@ _setup_kernel_work_folder() {
 
   cd "$_kernel_source_folder_abs"
 
-  msg2 "Fetching tag: $_kernel_git_tag from remote $_git_mirror" | tee "$_where/git_work.log.txt"
-  git fetch --depth 1 $_git_mirror tag "$_kernel_git_tag" &>> "$_where/git_work.log.txt"
+  if [[ ! "$_offline" =~ ^(y|Y|yes|true|True)$ ]]; then
+    msg2 "Fetching tag: $_kernel_git_tag from remote $_git_mirror" | tee "$_where/git_work.log.txt"
+    git fetch --depth 1 $_git_mirror tag "$_kernel_git_tag" &>> "$_where/git_work.log.txt"
+  fi
 
   msg2 "Checking out tag: $_kernel_git_tag" | tee -a "$_where/git_work.log"
   msg2 "   in the work folder: $_kernel_work_folder_abs" | tee -a "$_where/git_work.log.txt"
@@ -532,19 +586,6 @@ _tkg_initscript() {
     msg2 "git clone --depth=1 https://github.com/Frogging-Family/linux-tkg.git"
     exit 1
   fi
-
-  local _deprecated_config_vars=(
-    "_use_tmpfs"
-    "_source_in_tmpfs"
-    "_tmpfs_path"
-    "_cacule_rdb"
-    "_cacule_rdb_interval"
-    "_tt_high_hz"
-    "_x86_64_isalvl"
-    "_dracut_options"
-    "_bcachefs"
-    "_eevdf_sched_ext_support"
-  )
 
   for _deprecated_var in "${_deprecated_config_vars[@]}"; do
     if [ -n "${!_deprecated_var}" ]; then
@@ -818,7 +859,7 @@ _tkg_srcprep() {
     if [ "$_kver" != "504" ]; then
       tkgpatch="$srcdir/0009-prjc.patch" && _tkg_patcher
     else
-      tkgpatch="$srcdir/0009-bmq_v5.4-r2.patch" && _tkg_patcher
+      tkgpatch="$srcdir/0009-bmq.patch" && _tkg_patcher
     fi
 
     if [ "${_aggressive_ondemand}" = "true" ] && [ "$_kver" != "504" ]; then
@@ -983,6 +1024,13 @@ _tkg_srcprep() {
     fi
   fi
 
+  # Arch 6.18 disabled MODULE_COMPRESS_ALL in favor of a zipkmod path for pacman
+  # This is not really functional as is for our multi-distro support, so let's re-enable it
+  # Don't enforce on lower than 6.11 due to Debian/Ubuntu + older Arch defconfigs not being concerned by this
+  if [[ $_kver -gt 611 ]]; then
+    _enable "CONFIG_MODULE_COMPRESS_ALL"
+  fi
+
   # Build kernel without debug symbols
   [[ "$_STRIP" == "true" ]] && _enable "DEBUG_INFO_NONE"
 
@@ -1017,12 +1065,11 @@ _tkg_srcprep() {
         return 1
       fi
     fi
-    # When Rust comes, soon :tm:
-    # if which rustc &> /dev/null; then
-    #   if ! ( rustc --print target-cpus | grep "$1" &> /dev/null ) ; then
-    #     return 1
-    #   fi
-    # fi
+    if which rustc &> /dev/null; then
+      if ! ( rustc --print target-cpus | grep "$1" &> /dev/null ) ; then
+        return 1
+      fi
+    fi
   }
 
   if [ -n "$_processor_opt" ] && ! _is_march_supported "$_processor_opt" ; then
@@ -1069,7 +1116,8 @@ _tkg_srcprep() {
 
   # Disable some debugging
   if [ "${_debugdisable}" = "true" ]; then
-    _disable "SLUB_DEBUG" "PM_DEBUG" "PM_ADVANCED_DEBUG" "PM_SLEEP_DEBUG" "ACPI_DEBUG" "SCHED_DEBUG" "LATENCYTOP" "DEBUG_PREEMPT"
+    _disable ACPI_DEBUG BLK_DEBUG_FS BT_DEBUGFS BT_FEATURE_DEBUG CFG80211_DEBUGFS CIFS_DEBUG CMA_DEBUGFS CRYPTO_DEV_CCP_DEBUGFS DEBUG_KERNEL DEBUG_RODATA_TEST DM_DEBUG DYNAMIC_DEBUG DYNAMIC_DEBUG_CORE IWLWIFI_DEBUG NETFS_DEBUG PM_DEBUG PNP_DEBUG_MESSAGES SHRINKER_DEBUG SND_DEBUG SUNRPC_DEBUG VIRTIO_DEBUG KFENCE SLUB_DEBUG RCU_TRACE SCHED_DEBUG DEBUG_MISC X86_DEBUG_FPU PM_ADVANCED_DEBUG PM_SLEEP_DEBUG DEBUG_WX HAVE_DEBUG_KMEMLEAK DEBUG_MEMORY_INIT SCHED_INFO SCHEDSTATS
+    _enable DEBUG_INFO_NONE EXPERT
   fi
 
   # TCP algorithms
@@ -1244,31 +1292,30 @@ _tkg_srcprep() {
 
   # compiler optimization level
   if [ "$_compileroptlevel" = "1" ]; then
-    if [ "$_kver" != "504" ]; then
-      _disable "CC_OPTIMIZE_FOR_PERFORMANCE_O3"
-    else
+    if [ "$_kver" == "504" ]; then
       _disable "CC_OPTIMIZE_HARDER"
+    else
+      _disable "CC_OPTIMIZE_FOR_PERFORMANCE_O3"
     fi
   elif [ "$_compileroptlevel" = "2" ]; then
     if [[ $_kver -ge 600 ]]; then
       tkgpatch="$srcdir/0013-optimize_harder_O3.patch"
       _msg="Patching O3 optimization"
       _tkg_patcher
+    fi
+    _disable "CC_OPTIMIZE_FOR_PERFORMANCE"
+    if [ "$_kver" == "504" ]; then
+      _enable "CC_OPTIMIZE_HARDER"
     else
-      _disable "CC_OPTIMIZE_FOR_PERFORMANCE"
-      if [ "$_kver" != "504" ]; then
-        _enable "CC_OPTIMIZE_FOR_PERFORMANCE_O3"
-      else
-        _enable "CC_OPTIMIZE_HARDER"
-      fi
+      _enable "CC_OPTIMIZE_FOR_PERFORMANCE_O3"
     fi
   elif [ "$_compileroptlevel" = "3" ]; then
     _disable "CC_OPTIMIZE_FOR_PERFORMANCE"
     _enable "CC_OPTIMIZE_FOR_SIZE"
     if [ "$_kver" != "504" ]; then
-      _disable "CC_OPTIMIZE_FOR_PERFORMANCE_O3"
-    else
       _disable "CC_OPTIMIZE_HARDER"
+    else
+      _disable "CC_OPTIMIZE_FOR_PERFORMANCE_O3"
     fi
   fi
 
@@ -1362,15 +1409,9 @@ _tkg_srcprep() {
     _enable "CPU_FREQ_DEFAULT_GOV_ONDEMAND" "CPU_FREQ_GOV_ONDEMAND"
   fi
 
-  # ftrace
-  if [ -z "$_ftracedisable" ]; then
-    plain ""
-    plain "Disable FUNCTION_TRACER/GRAPH_TRACER? Lowers overhead but limits debugging"
-    plain "and analyzing of kernel functions."
-    read -rp "`echo $'    > N/y : '`" CONDITION2;
-  fi
-  if [[ "$CONDITION2" =~ [yY] ]] || [ "$_ftracedisable" = "true" ]; then
-    _disable "FUNCTION_TRACER" "FUNCTION_GRAPH_TRACER"
+  # ftrace disable
+  if [[ "$_ftracedisable" = "true" ]]; then
+    _disable FTRACE
   fi
 
   # disable numa
@@ -1843,17 +1884,18 @@ fi
   local _mtune="$_processor_opt"
   [[ "$_processor_opt" =~ x86-64 ]] && _mtune="generic"
 
-  set -o pipefail
-  if local cflags_source_line_number=$(grep -F -n 'KBUILD_CFLAGS   += $(KCFLAGS)' Makefile 2> /dev/null | cut -d":" -f1); then
-    sed -i "${cflags_source_line_number}i KBUILD_CFLAGS   += -mtune=$_mtune" Makefile
-    sed -i "${cflags_source_line_number}i KBUILD_CFLAGS   += -march=$_processor_opt" Makefile
+  local cflags_source_line_number=$(grep -E -n '^KBUILD_CFLAGS[[:space:]]+\+=[[:space:]]+\$\(KCFLAGS\)' Makefile 2> /dev/null | head -n1 | cut -d":" -f1)
+  if [[ -n "$cflags_source_line_number" ]]; then
+    sed -i "${cflags_source_line_number}i KBUILD_CFLAGS += -mtune=$_mtune" Makefile
+    sed -i "${cflags_source_line_number}i KBUILD_CFLAGS += -march=$_processor_opt" Makefile
     sed -i "${cflags_source_line_number}i # The following two lines are added by linux-tkg script" Makefile
   else
     warning "Couldn't set -march and -mtune for C files in Makefile. Please open a bug report on this"
     [[ "$_nofallback" = "true" ]] && exit 1
   fi
 
-  if local cppflags_source_line_number=$(grep -F -n 'KBUILD_CPPFLAGS += $(KCPPFLAGS)' Makefile 2> /dev/null | cut -d":" -f1); then
+  local cppflags_source_line_number=$(grep -E -n '^KBUILD_CPPFLAGS[[:space:]]+\+=[[:space:]]+\$\(KCPPFLAGS\)' Makefile 2> /dev/null | head -n1 | cut -d":" -f1)
+  if [[ -n "$cppflags_source_line_number" ]]; then
     sed -i "${cppflags_source_line_number}i KBUILD_CPPFLAGS += -mtune=$_mtune" Makefile
     sed -i "${cppflags_source_line_number}i KBUILD_CPPFLAGS += -march=$_processor_opt" Makefile
     sed -i "${cppflags_source_line_number}i # The following two lines are added by linux-tkg script" Makefile
@@ -1862,15 +1904,17 @@ fi
     [[ "$_nofallback" = "true" ]] && exit 1
   fi
 
-  # if local rustflags_source_line_number=$(grep -F -n 'KBUILD_RUSTFLAGS += $(KRUSTFLAGS)' Makefile 2> /dev/null | cut -d":" -f1); then
-  #   sed -i "${rustflags_source_line_number}i KBUILD_RUSTFLAGS += -Ztune-cpu=$_mtune" Makefile
-  #   sed -i "${rustflags_source_line_number}i KBUILD_RUSTFLAGS += -Ctarget-cpu=$_processor_opt" Makefile
-  #   sed -i "${rustflags_source_line_number}i # The following two lines are added by linux-tkg script" Makefile
-  # else
-  #   warning "Couldn't set -march and -mtune for Rust files in Makefile. Please open a bug report on this"
-  #   [[ "$_nofallback" = "true" ]] && exit 1
-  # fi
-  set +o pipefail
+  if (( "$_kver" >= 601 )); then
+    local rustflags_source_line_number=$(grep -E -n '^KBUILD_RUSTFLAGS[[:space:]]+\+=[[:space:]]+\$\(KRUSTFLAGS\)' Makefile 2> /dev/null | head -n1 | cut -d":" -f1)
+    if [[ -n "$rustflags_source_line_number" ]]; then
+      sed -i "${rustflags_source_line_number}i KBUILD_RUSTFLAGS += -Ztune-cpu=$_mtune" Makefile
+      sed -i "${rustflags_source_line_number}i KBUILD_RUSTFLAGS += -Ctarget-cpu=$_processor_opt" Makefile
+      sed -i "${rustflags_source_line_number}i # The following two lines are added by linux-tkg script" Makefile
+    else
+      warning "Couldn't set -march and -mtune for Rust files in Makefile. Please open a bug report on this"
+      [[ "$_nofallback" = "true" ]] && exit 1
+    fi
+  fi
 
   # copy new config file back to the user's git folder for an eventual future use
   cp .config "${_where}"/kernelconfig.new

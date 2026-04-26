@@ -30,6 +30,7 @@ _where="$PWD" # track basedir as different Arch based distros are moving srcdir 
 if [ ! -e "$_where"/BIG_UGLY_FROGMINER ]; then
 
   cp "$_where"/customization.cfg "$_where"/BIG_UGLY_FROGMINER
+  echo >> "$_where"/BIG_UGLY_FROGMINER
 
   # extract and define value of _EXT_CONFIG_PATH from customization file
   if [[ -z "$_EXT_CONFIG_PATH" ]]; then
@@ -39,6 +40,7 @@ if [ ! -e "$_where"/BIG_UGLY_FROGMINER ]; then
   if [ -f "$_EXT_CONFIG_PATH" ]; then
     msg2 "External configuration file $_EXT_CONFIG_PATH will be used and will override customization.cfg values."
     cat "$_EXT_CONFIG_PATH" >> "$_where"/BIG_UGLY_FROGMINER
+    echo >> "$_where"/BIG_UGLY_FROGMINER
   fi
 
   declare -p -x >> "$_where"/BIG_UGLY_FROGMINER
@@ -65,9 +67,29 @@ pkgdesc='Linux-tkg'
 arch=('x86_64') # no i686 in here
 url="https://www.kernel.org/"
 license=('GPL2')
-makedepends=('bison' 'xmlto' 'docbook-xsl' 'inetutils' 'bc' 'libelf' 'pahole' 'patchutils' 'flex' 'python-sphinx' 'python-sphinx_rtd_theme' 'graphviz' 'imagemagick' 'git' 'cpio' 'perl' 'tar' 'xz' 'wget')
+makedepends=(
+  bc
+  binutils
+  cpio
+  gettext
+  glibc
+  libelf
+  libgcc
+  openssl
+  pahole
+  perl
+  python
+  rust
+  rust-bindgen
+  rust-src
+  tar
+  xxhash
+  xz
+  zlib
+  zstd
+)
 if [ "$_compiler_name" = "-llvm" ]; then
-  makedepends+=( 'lld' 'clang' 'llvm')
+  makedepends+=('clang' 'llvm' 'lld')
 fi
 optdepends=('schedtool')
 options=('!strip' 'docs')
@@ -140,6 +162,7 @@ build() {
 
     export KCPPFLAGS
     export KCFLAGS
+    export KRUSTFLAGS
 
     time ( make ${_force_all_threads} ${llvm_opt} LOCALVERSION= bzImage modules 2>&1 ) 3>&1 1>&2 2>&3
     return 0
@@ -157,7 +180,8 @@ hackbase() {
               'modprobed-db: Keeps track of EVERY kernel module that has ever been probed. Useful for make localmodconfig.'
               'nvidia-tkg: NVIDIA drivers for all installed kernels - non-dkms version.'
               'nvidia-dkms-tkg: NVIDIA drivers for all installed kernels - dkms version.'
-              'update-grub: Simple wrapper around grub-mkconfig.')
+              'update-grub: Simple wrapper around grub-mkconfig.'
+              'scx-scheds: to use sched-ext schedulers')
   if [ -e "${srcdir}/ntsync.rules" ]; then
     provides=("linux=${pkgver}" "${pkgbase}" VIRTUALBOX-GUEST-MODULES WIREGUARD-MODULE NTSYNC-MODULE ntsync-header)
   else
@@ -224,13 +248,9 @@ hackheaders() {
 
   pkgdesc="Headers and scripts for building modules for the $pkgdesc kernel - https://github.com/Frogging-Family/linux-tkg"
   provides=("linux-headers=${pkgver}" "${pkgbase}-headers=${pkgver}")
-  case $_basever in
-    54|57|58|59|510)
-    ;;
-    *)
-      depends=('pahole')
-    ;;
-  esac
+  if [[ $_kver -gt 510 ]]; then  
+    depends=('pahole')
+  fi
 
   cd "$_kernel_work_folder_abs"
 
@@ -250,7 +270,7 @@ hackheaders() {
   mkdir -p "$builddir"/{fs/xfs,mm}
 
   # add resolve_btfids on 5.16+
-  if [[ $_basever = 6* ]] || [ $_basever -ge 516 ]; then
+  if [[ $_kver -ge 516 ]]; then
     install -Dt "$builddir"/tools/bpf/resolve_btfids tools/bpf/resolve_btfids/resolve_btfids || ( warning "$builddir/tools/bpf/resolve_btfids was not found. This is undesirable and might break dkms modules !!! Please review your config changes and consider using the provided defconfig and tweaks without further modification." && read -rp "Press enter to continue anyway" )
   fi
 

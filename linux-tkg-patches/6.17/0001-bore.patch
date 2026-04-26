@@ -1,7 +1,7 @@
-From 2d89fac8c1620dd0e81191adb33b42f4bb81c203 Mon Sep 17 00:00:00 2001
+From 925fe3dcbc65ccbeca8f9dc5bebebc5a727503ef Mon Sep 17 00:00:00 2001
 From: Masahito S <firelzrd@gmail.com>
-Date: Wed, 27 Aug 2025 08:07:40 +0900
-Subject: [PATCH] linux6.17-bore-6.5.2
+Date: Wed, 12 Nov 2025 04:55:39 +0900
+Subject: [PATCH] linux6.17.4-bore-6.5.9
 
 ---
  include/linux/sched.h      |  29 +++
@@ -11,13 +11,13 @@ Subject: [PATCH] linux6.17-bore-6.5.2
  kernel/fork.c              |   8 +
  kernel/futex/waitwake.c    |  11 ++
  kernel/sched/Makefile      |   1 +
- kernel/sched/bore.c        | 393 +++++++++++++++++++++++++++++++++++++
+ kernel/sched/bore.c        | 387 +++++++++++++++++++++++++++++++++++++
  kernel/sched/core.c        |  12 ++
  kernel/sched/debug.c       |  61 ++++++
  kernel/sched/fair.c        | 124 ++++++++++--
  kernel/sched/features.h    |   3 +
  kernel/sched/sched.h       |   9 +
- 13 files changed, 712 insertions(+), 12 deletions(-)
+ 13 files changed, 706 insertions(+), 12 deletions(-)
  create mode 100644 include/linux/sched/bore.h
  create mode 100644 kernel/sched/bore.c
 
@@ -70,7 +70,7 @@ index e4ce0a7683..fa9c484128 100644
  #ifdef CONFIG_SCHED_CORE
 diff --git a/include/linux/sched/bore.h b/include/linux/sched/bore.h
 new file mode 100644
-index 0000000000..5afb5fed4e
+index 0000000000..79dd72b9aa
 --- /dev/null
 +++ b/include/linux/sched/bore.h
 @@ -0,0 +1,39 @@
@@ -86,7 +86,7 @@ index 0000000000..5afb5fed4e
 +#define SCHED_BORE_AUTHOR   "Masahito Suzuki"
 +#define SCHED_BORE_PROGNAME "BORE CPU Scheduler modification"
 +
-+#define SCHED_BORE_VERSION  "6.5.2"
++#define SCHED_BORE_VERSION  "6.5.9"
 +
 +extern u8   __read_mostly sched_bore;
 +extern u8   __read_mostly sched_burst_inherit_type;
@@ -114,7 +114,7 @@ index 0000000000..5afb5fed4e
 +
 +#endif /* _KERNEL_SCHED_BORE_H */
 diff --git a/init/Kconfig b/init/Kconfig
-index ecddb94db8..c34b454ba6 100644
+index 87c868f86a..ae34ed300e 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
 @@ -1413,6 +1413,23 @@ config CHECKPOINT_RESTORE
@@ -167,7 +167,7 @@ index ce1435cb08..9eee2005e2 100644
 +	 an unnecessarily large base slice, resulting in high scheduling
 +	 latency and poor system responsiveness.
 diff --git a/kernel/fork.c b/kernel/fork.c
-index 6ca8689a83..dbcb91b689 100644
+index bb86c57cc0..e951c03209 100644
 --- a/kernel/fork.c
 +++ b/kernel/fork.c
 @@ -116,6 +116,10 @@
@@ -193,7 +193,7 @@ index 6ca8689a83..dbcb91b689 100644
  	/* CLONE_PARENT re-uses the old parent */
  	if (clone_flags & (CLONE_PARENT|CLONE_THREAD)) {
 diff --git a/kernel/futex/waitwake.c b/kernel/futex/waitwake.c
-index e2bbe5509e..84812b7876 100644
+index e2bbe5509e..6484ad583f 100644
 --- a/kernel/futex/waitwake.c
 +++ b/kernel/futex/waitwake.c
 @@ -4,6 +4,9 @@
@@ -202,7 +202,7 @@ index e2bbe5509e..84812b7876 100644
  #include <linux/freezer.h>
 +#ifdef CONFIG_SCHED_BORE
 +#include <linux/sched/bore.h>
-+#endif // CONFIG_SCHED_BORE
++#endif /* CONFIG_SCHED_BORE */
  
  #include "futex.h"
  
@@ -213,12 +213,12 @@ index e2bbe5509e..84812b7876 100644
 +#ifdef CONFIG_SCHED_BORE
 +		{
 +			current->bore.futex_waiting = true;
-+#endif // CONFIG_SCHED_BORE
++#endif /* CONFIG_SCHED_BORE */
  			schedule();
 +#ifdef CONFIG_SCHED_BORE
 +			current->bore.futex_waiting = false;
 +		}
-+#endif // CONFIG_SCHED_BORE
++#endif /* CONFIG_SCHED_BORE */
  	}
  	__set_current_state(TASK_RUNNING);
  }
@@ -233,10 +233,10 @@ index 8ae86371dd..b688084bce 100644
 +obj-$(CONFIG_SCHED_BORE) += bore.o
 diff --git a/kernel/sched/bore.c b/kernel/sched/bore.c
 new file mode 100644
-index 0000000000..c9e76eda35
+index 0000000000..7c1baa1bdf
 --- /dev/null
 +++ b/kernel/sched/bore.c
-@@ -0,0 +1,393 @@
+@@ -0,0 +1,387 @@
 +/*
 + *  Burst-Oriented Response Enhancer (BORE) CPU Scheduler
 + *  Copyright (C) 2021-2025 Masahito Suzuki <firelzrd@gmail.com>
@@ -321,15 +321,9 @@ index 0000000000..c9e76eda35
 +	struct bore_ctx *ctx = &p->bore;
 +
 +	u8  prev_prio = effective_prio_bore(p);
-+	u32 penalty = 0;
 +
-+	if (!(p->flags & PF_KTHREAD)) {
-+		u32 curr_penalty = ctx->curr_penalty;
-+		penalty = ctx->prev_penalty;
-+		if (penalty < curr_penalty)
-+			penalty = curr_penalty;
-+	}
-+	ctx->penalty = penalty;
++	ctx->penalty = (p->flags & PF_KTHREAD)? 0:
++		max(ctx->curr_penalty, ctx->prev_penalty);
 +
 +	u8 new_prio = effective_prio_bore(p);
 +	if (new_prio != prev_prio)
@@ -775,7 +769,7 @@ index 02e16b70a7..751df396d9 100644
  	P(se.avg.runnable_sum);
  	P(se.avg.util_sum);
 diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
-index 8ce56a8d50..86565bf058 100644
+index 8ce56a8d50..507e1c1ef8 100644
 --- a/kernel/sched/fair.c
 +++ b/kernel/sched/fair.c
 @@ -58,6 +58,10 @@
@@ -862,10 +856,10 @@ index 8ce56a8d50..86565bf058 100644
 +	u64 slice = sysctl_sched_base_slice;
 +	bool run_to_parity = likely(sched_bore) ?
 +		sched_feat(RUN_TO_PARITY_BORE) : sched_feat(RUN_TO_PARITY);
-+#else // CONFIG_SCHED_BORE
++#else /* CONFIG_SCHED_BORE */
  	u64 slice = normalized_sysctl_sched_base_slice;
 +	bool run_to_parity = sched_feat(RUN_TO_PARITY);
-+#endif CONFIG_SCHED_BORE
++#endif /* CONFIG_SCHED_BORE */
  	u64 vprot = se->deadline;
  
 -	if (sched_feat(RUN_TO_PARITY))
@@ -1061,9 +1055,9 @@ index 8ce56a8d50..86565bf058 100644
 +	bool run_to_parity = likely(sched_bore) ?
 +		sched_feat(RUN_TO_PARITY_BORE) : sched_feat(RUN_TO_PARITY);
 +	if (run_to_parity && do_preempt_short)
-+#else // CONFIG_SCHED_BORE
++#else /* CONFIG_SCHED_BORE */
  	if (sched_feat(RUN_TO_PARITY) && do_preempt_short)
-+#endif CONFIG_SCHED_BORE
++#endif /* CONFIG_SCHED_BORE */
  		update_protect_slice(cfs_rq, se);
  
  	return;

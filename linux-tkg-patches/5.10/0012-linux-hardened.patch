@@ -1,5 +1,5 @@
 diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
-index bac4b1493222..e240f3beaa1d 100644
+index 0f1605d78e83..895ed5ae1086 100644
 --- a/Documentation/admin-guide/kernel-parameters.txt
 +++ b/Documentation/admin-guide/kernel-parameters.txt
 @@ -518,17 +518,6 @@
@@ -102,13 +102,13 @@ index e912a47765f3..69514ce4e99a 100644
  	If set, provide RFC2861 behavior and time out the congestion
  	window after an idle period.  An idle period is defined at
 diff --git a/Makefile b/Makefile
-index 3a8b862026a5..8154d24c82a7 100644
+index bceb0c9760a7..f4e5d198706f 100644
 --- a/Makefile
 +++ b/Makefile
 @@ -2,7 +2,7 @@
  VERSION = 5
  PATCHLEVEL = 10
- SUBLEVEL = 245
+ SUBLEVEL = 252
 -EXTRAVERSION =
 +EXTRAVERSION = -hardened1
  NAME = Dare mighty things
@@ -137,10 +137,10 @@ index 72e4cef062ac..c1374d22e7e1 100644
  	help
  	  This value can be used to select the number of bits to use to
 diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
-index cd13f02d579b..aff33fd1ea19 100644
+index 308ea83cb07d..e2fba731513b 100644
 --- a/arch/arm64/Kconfig
 +++ b/arch/arm64/Kconfig
-@@ -1285,6 +1285,7 @@ config RODATA_FULL_DEFAULT_ENABLED
+@@ -1286,6 +1286,7 @@ config RODATA_FULL_DEFAULT_ENABLED
  
  config ARM64_SW_TTBR0_PAN
  	bool "Emulate Privileged Access Never using TTBR0_EL1 switching"
@@ -148,7 +148,7 @@ index cd13f02d579b..aff33fd1ea19 100644
  	help
  	  Enabling this option prevents the kernel from accessing
  	  user-space memory directly by pointing TTBR0_EL1 to a reserved
-@@ -1883,6 +1884,7 @@ config RANDOMIZE_BASE
+@@ -1884,6 +1885,7 @@ config RANDOMIZE_BASE
  	bool "Randomize the address of the kernel image"
  	select ARM64_MODULE_PLTS if MODULES
  	select RELOCATABLE
@@ -451,10 +451,10 @@ index 569ac1d57f55..044d88da4aee 100644
  	native_write_cr4(cr4 ^ X86_CR4_PGE);
  	/* write old PGE again and flush TLBs */
 diff --git a/block/blk-mq.c b/block/blk-mq.c
-index 21531aa163cb..4c5ea87db595 100644
+index a72009746067..03d876e61265 100644
 --- a/block/blk-mq.c
 +++ b/block/blk-mq.c
-@@ -573,7 +573,7 @@ EXPORT_SYMBOL(blk_mq_end_request);
+@@ -574,7 +574,7 @@ EXPORT_SYMBOL(blk_mq_end_request);
   * Softirq action handler - move entries to local list and loop over them
   * while passing them to the queue registered handler.
   */
@@ -677,7 +677,7 @@ index 7be4e8f77a5c..3c09007452d9 100644
  	usb_debugfs_cleanup();
  	idr_destroy(&usb_bus_idr);
 diff --git a/fs/exec.c b/fs/exec.c
-index 7144c541818f..8018de4cdc4e 100644
+index 2979b458b650..155b62bb19b0 100644
 --- a/fs/exec.c
 +++ b/fs/exec.c
 @@ -64,6 +64,7 @@
@@ -713,7 +713,7 @@ index 320b70ce79a7..00b5cdb71b69 100644
  {
  	return -ENXIO;
 diff --git a/fs/namei.c b/fs/namei.c
-index 3eb0130f0c3f..5b1aca523cb0 100644
+index debebcbe702f..40a233851362 100644
 --- a/fs/namei.c
 +++ b/fs/namei.c
 @@ -942,10 +942,10 @@ static inline void put_link(struct nameidata *nd)
@@ -949,7 +949,7 @@ index 2b5b64256cf4..8cdce21dce0f 100644
  const struct kobj_ns_type_operations *kobj_child_ns_ops(struct kobject *parent);
  const struct kobj_ns_type_operations *kobj_ns_ops(struct kobject *kobj);
 diff --git a/include/linux/mm.h b/include/linux/mm.h
-index e168d87d6f2e..73de05a72ed7 100644
+index 4787d39bbad4..3f9abf2979d5 100644
 --- a/include/linux/mm.h
 +++ b/include/linux/mm.h
 @@ -770,7 +770,7 @@ static inline int is_vmalloc_or_module_addr(const void *x)
@@ -980,10 +980,10 @@ index e168d87d6f2e..73de05a72ed7 100644
  
  static inline unsigned int compound_order(struct page *page)
 diff --git a/include/linux/percpu.h b/include/linux/percpu.h
-index 5e76af742c80..9a6c682ec127 100644
+index c9a84532bb79..deecc88598e1 100644
 --- a/include/linux/percpu.h
 +++ b/include/linux/percpu.h
-@@ -123,7 +123,7 @@ extern int __init pcpu_page_first_chunk(size_t reserved_size,
+@@ -124,7 +124,7 @@ extern int __init pcpu_page_first_chunk(size_t reserved_size,
  				pcpu_fc_populate_pte_fn_t populate_pte_fn);
  #endif
  
@@ -992,7 +992,7 @@ index 5e76af742c80..9a6c682ec127 100644
  extern bool __is_kernel_percpu_address(unsigned long addr, unsigned long *can_addr);
  extern bool is_kernel_percpu_address(unsigned long addr);
  
-@@ -131,8 +131,8 @@ extern bool is_kernel_percpu_address(unsigned long addr);
+@@ -132,8 +132,8 @@ extern bool is_kernel_percpu_address(unsigned long addr);
  extern void __init setup_per_cpu_areas(void);
  #endif
  
@@ -1001,8 +1001,8 @@ index 5e76af742c80..9a6c682ec127 100644
 +extern void __percpu *__alloc_percpu_gfp(size_t size, size_t align, gfp_t gfp) __attribute__((alloc_size(1)));
 +extern void __percpu *__alloc_percpu(size_t size, size_t align) __attribute__((alloc_size(1)));
  extern void free_percpu(void __percpu *__pdata);
- extern phys_addr_t per_cpu_ptr_to_phys(void *addr);
  
+ DEFINE_FREE(free_percpu, void __percpu *, free_percpu(_T))
 diff --git a/include/linux/perf_event.h b/include/linux/perf_event.h
 index 3b038a2cc007..07703f58aa4e 100644
 --- a/include/linux/perf_event.h
@@ -1023,10 +1023,10 @@ index 3b038a2cc007..07703f58aa4e 100644
  {
  	if (sysctl_perf_event_paranoid > 1 && !perfmon_capable())
 diff --git a/include/linux/slab.h b/include/linux/slab.h
-index dd6897f62010..78f99835b91b 100644
+index 94f15ca08727..7861e72ad219 100644
 --- a/include/linux/slab.h
 +++ b/include/linux/slab.h
-@@ -181,7 +181,7 @@ int kmem_cache_shrink(struct kmem_cache *);
+@@ -182,7 +182,7 @@ int kmem_cache_shrink(struct kmem_cache *);
  /*
   * Common kmalloc functions provided by all allocators
   */
@@ -1035,7 +1035,7 @@ index dd6897f62010..78f99835b91b 100644
  void kfree(const void *);
  void kfree_sensitive(const void *);
  size_t __ksize(const void *);
-@@ -386,7 +386,7 @@ static __always_inline unsigned int kmalloc_index(size_t size)
+@@ -389,7 +389,7 @@ static __always_inline unsigned int kmalloc_index(size_t size)
  }
  #endif /* !CONFIG_SLOB */
  
@@ -1044,7 +1044,7 @@ index dd6897f62010..78f99835b91b 100644
  void *kmem_cache_alloc(struct kmem_cache *, gfp_t flags) __assume_slab_alignment __malloc;
  void kmem_cache_free(struct kmem_cache *, void *);
  
-@@ -410,7 +410,7 @@ static __always_inline void kfree_bulk(size_t size, void **p)
+@@ -413,7 +413,7 @@ static __always_inline void kfree_bulk(size_t size, void **p)
  }
  
  #ifdef CONFIG_NUMA
@@ -1053,7 +1053,7 @@ index dd6897f62010..78f99835b91b 100644
  void *kmem_cache_alloc_node(struct kmem_cache *, gfp_t flags, int node) __assume_slab_alignment __malloc;
  #else
  static __always_inline void *__kmalloc_node(size_t size, gfp_t flags, int node)
-@@ -535,7 +535,7 @@ static __always_inline void *kmalloc_large(size_t size, gfp_t flags)
+@@ -538,7 +538,7 @@ static __always_inline void *kmalloc_large(size_t size, gfp_t flags)
   *	Try really hard to succeed the allocation but fail
   *	eventually.
   */
@@ -1062,7 +1062,7 @@ index dd6897f62010..78f99835b91b 100644
  {
  	if (__builtin_constant_p(size)) {
  #ifndef CONFIG_SLOB
-@@ -557,7 +557,7 @@ static __always_inline void *kmalloc(size_t size, gfp_t flags)
+@@ -560,7 +560,7 @@ static __always_inline void *kmalloc(size_t size, gfp_t flags)
  	return __kmalloc(size, flags);
  }
  
@@ -1216,10 +1216,10 @@ index e51d75f5165b..d2e6f74b1975 100644
  #define TTY_MAGIC		0x5401
  
 diff --git a/include/linux/usb.h b/include/linux/usb.h
-index a0477454ad56..88ecc6e4d035 100644
+index bf5f2ead49c4..02048e95e676 100644
 --- a/include/linux/usb.h
 +++ b/include/linux/usb.h
-@@ -2041,6 +2041,17 @@ extern void usb_led_activity(enum usb_led_event ev);
+@@ -2035,6 +2035,17 @@ extern void usb_led_activity(enum usb_led_event ev);
  static inline void usb_led_activity(enum usb_led_event ev) {}
  #endif
  
@@ -1545,7 +1545,7 @@ index c9cd1f622a1f..5f610a8b2a62 100644
  		return err;
  
 diff --git a/kernel/fork.c b/kernel/fork.c
-index cdf28ac44879..bc67e757e3f1 100644
+index 072fe9d6c47b..02b6fd1ba01c 100644
 --- a/kernel/fork.c
 +++ b/kernel/fork.c
 @@ -82,6 +82,7 @@
@@ -1607,10 +1607,10 @@ index c4eb06d37ae9..d847d90c8930 100644
  	rcu_core();
  }
 diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
-index 9f8cb265589b..242a559cf6a7 100644
+index c11d59bea0ea..21ff7eddd553 100644
 --- a/kernel/sched/fair.c
 +++ b/kernel/sched/fair.c
-@@ -10931,7 +10931,7 @@ static int newidle_balance(struct rq *this_rq, struct rq_flags *rf)
+@@ -10931,7 +10931,7 @@ static int sched_balance_newidle(struct rq *this_rq, struct rq_flags *rf)
   * run_rebalance_domains is triggered when needed from the scheduler tick.
   * Also triggered for nohz idle balancing (with nohz_balancing_kick set).
   */
@@ -1873,7 +1873,7 @@ index abe0f16d5364..a501bb64ff0c 100644
  EXPORT_SYMBOL(proc_dointvec_ms_jiffies);
  EXPORT_SYMBOL(proc_dostring);
 diff --git a/kernel/time/hrtimer.c b/kernel/time/hrtimer.c
-index c202488695c4..3b0d9d99d01f 100644
+index cf928eb8f2f8..55eb6b2eefcb 100644
 --- a/kernel/time/hrtimer.c
 +++ b/kernel/time/hrtimer.c
 @@ -1656,7 +1656,7 @@ static void __hrtimer_run_queues(struct hrtimer_cpu_base *cpu_base, ktime_t now,
@@ -2023,7 +2023,7 @@ index aa8fc4371e93..04acd28af873 100644
  	if (count > minlen)
  		memset(dest + minlen, 0, count - minlen);
 diff --git a/lib/vsprintf.c b/lib/vsprintf.c
-index b08b8ee1bbc0..f0b1013d049a 100644
+index b643012ae47f..4f7fd9c3a81d 100644
 --- a/lib/vsprintf.c
 +++ b/lib/vsprintf.c
 @@ -849,7 +849,7 @@ static char *ptr_to_id(char *buf, char *end, const void *ptr,
@@ -2080,7 +2080,7 @@ index 4d5e9d085f0a..8037dbe275f9 100644
  		mm->brk = brk;
  		goto success;
 diff --git a/mm/page_alloc.c b/mm/page_alloc.c
-index d906c6b96181..cea39b369105 100644
+index f5190e927d8e..f9a19db51999 100644
 --- a/mm/page_alloc.c
 +++ b/mm/page_alloc.c
 @@ -70,6 +70,7 @@
@@ -2693,10 +2693,10 @@ index 9e0c86555adf..55c0078ea1a1 100644
  
  unsigned long arch_mmap_rnd(void)
 diff --git a/net/core/dev.c b/net/core/dev.c
-index c0dc524548ee..a396665b4a80 100644
+index ab0b7df70351..0196028c1845 100644
 --- a/net/core/dev.c
 +++ b/net/core/dev.c
-@@ -4921,7 +4921,7 @@ int netif_rx_any_context(struct sk_buff *skb)
+@@ -4934,7 +4934,7 @@ int netif_rx_any_context(struct sk_buff *skb)
  }
  EXPORT_SYMBOL(netif_rx_any_context);
  
@@ -2705,7 +2705,7 @@ index c0dc524548ee..a396665b4a80 100644
  {
  	struct softnet_data *sd = this_cpu_ptr(&softnet_data);
  
-@@ -6911,7 +6911,7 @@ static int napi_poll(struct napi_struct *n, struct list_head *repoll)
+@@ -6924,7 +6924,7 @@ static int napi_poll(struct napi_struct *n, struct list_head *repoll)
  	return work;
  }
  
@@ -2774,7 +2774,7 @@ index 59ba518a85b9..56b38a4f08d2 100644
  };
  
 diff --git a/net/ipv4/tcp_input.c b/net/ipv4/tcp_input.c
-index 64a87a39287a..23f08ab4a165 100644
+index 50af55778617..57615453e2ea 100644
 --- a/net/ipv4/tcp_input.c
 +++ b/net/ipv4/tcp_input.c
 @@ -82,6 +82,7 @@
@@ -2823,7 +2823,7 @@ index ab9eb4cbe33a..2870588ef733 100644
  	  secure!
  
 diff --git a/scripts/mod/modpost.c b/scripts/mod/modpost.c
-index fd77ac48dcc1..637e050e48d3 100644
+index 379d03d0c5e6..caebca58c2a8 100644
 --- a/scripts/mod/modpost.c
 +++ b/scripts/mod/modpost.c
 @@ -35,6 +35,8 @@ static int warn_unresolved = 0;
@@ -2835,7 +2835,7 @@ index fd77ac48dcc1..637e050e48d3 100644
  /* ignore missing files */
  static int ignore_missing_files;
  /* If set to 1, only warn (instead of error) about missing ns imports */
-@@ -1007,6 +1009,7 @@ enum mismatch {
+@@ -1011,6 +1013,7 @@ enum mismatch {
  	ANY_EXIT_TO_ANY_INIT,
  	EXPORT_TO_INIT_EXIT,
  	EXTABLE_TO_NON_TEXT,
@@ -2843,7 +2843,7 @@ index fd77ac48dcc1..637e050e48d3 100644
  };
  
  /**
-@@ -1133,6 +1136,12 @@ static const struct sectioncheck sectioncheck[] = {
+@@ -1137,6 +1140,12 @@ static const struct sectioncheck sectioncheck[] = {
  	.good_tosec = {ALL_TEXT_SECTIONS , NULL},
  	.mismatch = EXTABLE_TO_NON_TEXT,
  	.handler = extable_mismatch_handler,
@@ -2856,7 +2856,7 @@ index fd77ac48dcc1..637e050e48d3 100644
  }
  };
  
-@@ -1325,10 +1334,10 @@ static Elf_Sym *find_elf_symbol(struct elf_info *elf, Elf64_Sword addr,
+@@ -1329,10 +1338,10 @@ static Elf_Sym *find_elf_symbol(struct elf_info *elf, Elf64_Sword addr,
  			continue;
  		if (!is_valid_name(elf, sym))
  			continue;
@@ -2869,7 +2869,7 @@ index fd77ac48dcc1..637e050e48d3 100644
  		if (d < 0)
  			d = addr - sym->st_value;
  		if (d < distance) {
-@@ -1463,7 +1472,13 @@ static void report_sec_mismatch(const char *modname,
+@@ -1467,7 +1476,13 @@ static void report_sec_mismatch(const char *modname,
  	char *prl_from;
  	char *prl_to;
  
@@ -2884,7 +2884,7 @@ index fd77ac48dcc1..637e050e48d3 100644
  
  	get_pretty_name(from_is_func, &from, &from_p);
  	get_pretty_name(to_is_func, &to, &to_p);
-@@ -1585,6 +1600,12 @@ static void report_sec_mismatch(const char *modname,
+@@ -1589,6 +1604,12 @@ static void report_sec_mismatch(const char *modname,
  		fatal("There's a special handler for this mismatch type, "
  		      "we should never get here.");
  		break;
@@ -2897,7 +2897,7 @@ index fd77ac48dcc1..637e050e48d3 100644
  	}
  	fprintf(stderr, "\n");
  }
-@@ -2565,7 +2586,7 @@ int main(int argc, char **argv)
+@@ -2569,7 +2590,7 @@ int main(int argc, char **argv)
  	struct dump_list *dump_read_start = NULL;
  	struct dump_list **dump_read_iter = &dump_read_start;
  
@@ -2906,7 +2906,7 @@ index fd77ac48dcc1..637e050e48d3 100644
  		switch (opt) {
  		case 'e':
  			external_module = 1;
-@@ -2576,6 +2597,9 @@ int main(int argc, char **argv)
+@@ -2580,6 +2601,9 @@ int main(int argc, char **argv)
  			(*dump_read_iter)->file = optarg;
  			dump_read_iter = &(*dump_read_iter)->next;
  			break;
@@ -2916,7 +2916,7 @@ index fd77ac48dcc1..637e050e48d3 100644
  		case 'm':
  			modversions = 1;
  			break;
-@@ -2676,6 +2700,11 @@ int main(int argc, char **argv)
+@@ -2680,6 +2704,11 @@ int main(int argc, char **argv)
  	}
  
  	free(buf.p);
