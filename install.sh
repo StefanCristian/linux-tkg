@@ -196,6 +196,12 @@ if [ "$1" = "install" ]; then
   export KCPPFLAGS
   export KCFLAGS
 
+  read -p "Ready to build kernel '$_kernel_flavor'. Continue? Y/[n]: " _build_confirm
+  if ! [[ "$_build_confirm" =~ ^(Y|y|Yes|yes)$ ]]; then
+    msg2 "Build cancelled."
+    exit 0
+  fi
+
   if [[ "$_distro" =~ ^(Ubuntu|Debian)$ ]]; then
 
     msg2 "Building kernel DEB packages"
